@@ -15,7 +15,8 @@ class test extends StatefulWidget {
   List files=List();
   String ip;
   List filesPath=List();
-  test(this.files,this.ip,this.filesPath);
+  Map hotspotDetails=Map();
+  test(this.files,this.ip,this.filesPath,this.hotspotDetails);
 
   @override
   _testState createState() => _testState(this.files,this.ip,this.filesPath);
@@ -73,7 +74,15 @@ class _testState extends State<test> {
 
   }
 
-
+  Future getIpAddress()async{
+    for(var interface in await NetworkInterface.list()){
+      if(interface.name.contains("wlan")){
+        ip= interface.addresses[0].address;
+        break;
+      }
+    }
+    print(ip);
+  }
   connect()async {
     server2= await HttpServer.bind(ip, 8080);
     await for(HttpRequest request in server2){
@@ -454,6 +463,12 @@ class _testState extends State<test> {
 
   @override
   void initState() {
+    getIpAddress().whenComplete((){
+      setState(() {
+
+      });
+    });
+
     isPacketMaking=false;
 //    _start();
 //      createPackets().whenComplete((){
@@ -487,8 +502,32 @@ class _testState extends State<test> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               children: <Widget>[
-                Center(
-                  child: Text("Files"),
+                Column(
+                  children: <Widget>[
+                    Center(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: <Widget>[
+                            Text("SSID: ",style: TextStyle(
+                              fontSize: 12
+                            ),),
+                            Text("${widget.hotspotDetails["SSID"]}",style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                                fontSize: 22
+                            ),),
+                            Text("  Password: ",style: TextStyle(
+                                fontSize: 12
+                            ),),
+                            Text("${widget.hotspotDetails["Password"]}",style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 22
+                            ),)
+                          ],
+                        ),
+                      ),
+                    )
+                  ],
                 ),
                 Expanded(
                   child: ListView.builder(
@@ -538,7 +577,6 @@ class _testState extends State<test> {
                   child: Center(
                     child: QrImage(
                       data: ip,
-                      version: QrVersions.auto,
                       gapless: true,
                       size: 200,
                     foregroundColor: Colors.black,

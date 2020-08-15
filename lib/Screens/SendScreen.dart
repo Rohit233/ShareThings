@@ -1,32 +1,35 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:sharethings/AleartDialogs/ErrorDialog.dart';
 import 'package:sharethings/AleartDialogs/ImageShowDialog.dart';
+import 'package:sharethings/AleartDialogs/LocationTurnOnAlertDialog.dart';
 import 'package:sharethings/Screens/PlayVideo.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 //import 'package:device_apps/device_apps.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:sharethings/config.dart';
+import 'package:video_player/video_player.dart';
 import 'test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-//import 'package:wifi/wifi.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:flutter_multimedia_picker/data/MediaFile.dart';
 import 'package:flutter_multimedia_picker/fullter_multimedia_picker.dart';
 import 'package:flutter_file_manager/flutter_file_manager.dart';
 class SendScreen extends StatefulWidget {
+
   @override
   _SendScreenState createState() => _SendScreenState();
 }
 
 class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMixin {
-  List installApps=List();
+
   List selectToShare=List();
   List selectedPath=List();
   List selectedImagesPath=List();
   List<MediaFile> selectedImages=List<MediaFile>();
-  List imageThumbnail=List();
-  List videosThumbnail=List();
-  List videos=List();
+
   TabController _tabController;
   ValueNotifier<int> indexTab;
   Directory changeDirectory;
@@ -34,10 +37,12 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
   List files=List();
   String directoryPath;
   String IP;
-  List listImages=List();
+  static const platformForLocation=const MethodChannel("Native.code/deviceList");
+  static const platformForHotspot=const MethodChannel("Native.code/wifi");
   ValueNotifier<String> notifierImageThumbnail=ValueNotifier<String>("");
   ValueNotifier<String> notifierVideoThumbnail=ValueNotifier<String>("");
   static const platform=MethodChannel("Native.code/GetMedia");
+  static const platformForConnectivity=const MethodChannel("Native.code/wifi");
   static List<MediaFile> images=List<MediaFile>();
 
   Future <List>getApps()async{
@@ -65,39 +70,44 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
 // ),
 // ),
 // )
-  getIpAddress()async{
-    for(var interface in await NetworkInterface.list()){
+  Future getIpAddress()async{
+      for(var interface in await NetworkInterface.list()){
       if(interface.name.contains("wlan")){
-
-        IP= interface.addresses[0].address;
-        break;
+      IP= interface.addresses[0].address;
+      break;
       }
-    }
-
+      }
+      print(IP);
   }
   @override
   void initState(){
-    getIpAddress();
+//      getIpAddress();
     indexTab=ValueNotifier<int>(0);
     Timer(Duration(seconds: 2),(){
-      getApps().then((value){
-        setState(() {
-          installApps=value;
+      if(installApps.isEmpty) {
+        getApps().then((value) {
+          setState(() {
+            installApps = value;
+          });
         });
 
-      });
+      }
+      if(listImages.isEmpty) {
+        _getAllPhotos().whenComplete(() {
+          setState(() {
+
+          });
+        });
+      }
+      if(videos.isEmpty) {
+        _getAllVideos().whenComplete(() {
+          setState(() {
+
+          });
+        });
+      }
     });
 
-    _getAllPhotos().whenComplete((){
-      setState(() {
-
-      });
-    });
-    _getAllVideos().whenComplete((){
-      setState(() {
-
-      });
-    });
     _setpathForDirectory();
     _tabController=TabController(
         length: 4,
@@ -109,9 +119,8 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
       indexTab.value=_tabController.index;
 
       if(_tabController.index==2){
-        setState((){
 
-        });
+
       }
       else if(_tabController.index==3){
 
@@ -125,114 +134,193 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
     super.initState();
   }
 
+  NativeCodeHotspot()async{
+    try {
+      if (!(await platformForLocation.invokeMethod("checkLocationPermission"))){
+        if(await platformForLocation.invokeMethod("checkLocationOn")){
+          await platformForHotspot.invokeMethod("Hotspot").then((value){
+            if (value != null){
+              var wifiip;
+                getIpAddress().whenComplete((){
+                  wifiip=IP;
+                    Navigator.push(
+                        context, MaterialPageRoute(builder: (context) {
+                      return test(selectToShare, wifiip, selectedPath, value);
+                    }));
+
+                });
+
+//
+            }
+          });
+
+        }
+        else{
+          LocationTurnOnAlertDialog locationTurnOnAlertDialog=LocationTurnOnAlertDialog();
+          locationTurnOnAlertDialog.dialog(context);
+        }
+      }
+      else{
+        await platformForLocation.invokeMethod("locationPermission");
+      }
+
+    }on PlatformException catch(e){
+      print("failed");
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-        appBar: AppBar(
-          title: Text("Share Things"),
-          leading: ValueListenableBuilder(
-            valueListenable: indexTab,
-            builder: (BuildContext context,int text,Widget value){
-              return  text==3? IconButton(
-                icon: Icon((Icons.arrow_back),
-                ),
-                onPressed: ()async{
-                  if(directoryPath!="/storage"){
+    return WillPopScope(
+      onWillPop: ()async{
+//        Dialogs dialogs=Dialogs();
+//        dialogs.hotspotCloseWarning(context);
 
-                    directoryPath=Directory(directoryPath).parent.path.toString();
-                    files.clear();
-                    listDirectories=await _directories();
-                    setState(() {
-
-                    });
-                  }
-                  else if(directoryPath=="/storage/emulated/0"){
-                    setState(()async{
-                      directoryPath="/storage";
+        return true;
+      },
+      child: Scaffold(
+          appBar: AppBar(
+            title: Text("Share Things"),
+            leading: ValueListenableBuilder(
+              valueListenable: indexTab,
+              builder: (BuildContext context,int text,Widget value){
+                return  text==3? IconButton(
+                  icon: Icon((Icons.arrow_back),
+                  ),
+                  onPressed: ()async{
+                    if(directoryPath!="/storage"){
+                      directoryPath=Directory(directoryPath).parent.path.toString();
                       files.clear();
                       listDirectories=await _directories();
-                      setState((){
+                      setState(() {
 
                       });
-                    });
-                  }
-                },
-              ):Container();
-            },
+                    }
+                    else if(directoryPath=="/storage/emulated/0"){
+                      setState(()async{
+                        directoryPath="/storage";
+                        files.clear();
+                        listDirectories=await _directories();
+                        setState((){
 
-          ),
-          actions: <Widget>[
-            IconButton(
-              onPressed: selectedPath.isNotEmpty?()async{
-                var wifiip;
-                if(IP!=null){
-                  wifiip=IP;
-                }
-                Navigator.push(context, MaterialPageRoute(builder: (context){
-                  return test(selectToShare,wifiip,selectedPath);
-                }));
-              }:null,
-              iconSize: 30,
-              splashColor: Colors.blueAccent,
-              icon: Stack(
-                children: <Widget>[
-                  Icon(Icons.send,color: selectedPath.isNotEmpty?Colors.amber:Colors.grey,),
-                  selectedPath.isNotEmpty? Align(
-                    alignment: Alignment.bottomRight,
-                    child: Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.red,
-                      ),
-                      child: Center(
-                        child: Text(selectedPath.length.toString(),
+                        });
+                      });
+                    }
+                  },
+                ):Container();
+              },
+
+            ),
+            actions: <Widget>[
+              IconButton(
+                onPressed: selectedPath.isNotEmpty?()async{
+                  NativeCodeHotspot();
+//                  var wifiip;
+//                  if(IP!=null){
+//                    wifiip=IP;
+//                    Navigator.push(context, MaterialPageRoute(builder: (context){
+//                      return test(selectToShare,wifiip,selectedPath);
+//                    }));
+//                  }
+//                  else{
+//                    getIpAddress().whenComplete((){
+//                      Navigator.push(context, MaterialPageRoute(builder: (context){
+//                        wifiip=IP;
+//                        return test(selectToShare,wifiip,selectedPath);
+//                      }));
+//                    });
+//
+//                  }
+
+                }:null,
+                iconSize: 30,
+                splashColor: Colors.blueAccent,
+                icon: Stack(
+                  children: <Widget>[
+                    Icon(Icons.send,color: selectedPath.isNotEmpty?Colors.teal:Colors.grey,),
+                    selectedPath.isNotEmpty? Align(
+                      alignment: Alignment.bottomRight,
+                      child: Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: themeChanger.themeMode()==ThemeMode.dark?Colors.blueGrey:Colors.black26,
+                        ),
+                        child: Center(
+                          child: Text( selectedPath.length>=10000?"10000+":selectedPath.length.toString(),
+                            style: TextStyle(
+                              fontSize: selectedPath.length>=100 && selectedPath.length<1000?10:selectedPath.length>=1000 &&
+                                  selectedPath.length<10000 ?7:
+                              selectedPath.length>=10000?5:null,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ):Container()
-                ],
+                    ):Container()
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-        bottomNavigationBar: TabBar(
-          controller: _tabController,
-          unselectedLabelColor: MediaQuery.of(context).platformBrightness==Brightness.dark?Colors.white:Colors.black,
-          labelColor: Colors.amber,
-          indicatorWeight: 2.0,
-          indicatorColor: Colors.blueGrey,
-          tabs: <Widget>[
-            Tab(
-              icon: Icon(Icons.android),
-              child: Text("Apk"),
-            ),
-            Tab(
-              icon: Icon(Icons.image),
-              child: Text("Photos"),
-            ),
-            Tab(
-              icon: Icon(Icons.videocam),
-              child: Text("Videos"),
-            ),
-            Tab(
-              icon: Icon(Icons.folder),
-              child: Text("Files"),
-            )
-          ],
-        ),
-        body: TabBarView(
-          controller: _tabController,
-          children: <Widget>[
-            ShowApk(),
-            ShowPhotos(),
-            showVideos(),
-            showFiles(),
-          ],
-        )
+            ],
+          ),
+          bottomNavigationBar: TabBar(
+            controller: _tabController,
+            unselectedLabelColor: themeChanger.themeMode()==ThemeMode.dark?Colors.white:Colors.black,
+            labelColor: Colors.teal,
+            indicatorWeight: 2.0,
+            indicatorColor: Colors.blueGrey,
+            tabs: <Widget>[
+              Tab(
+                icon: Icon(Icons.android),
+                child: Text("Apk",
+                  style: TextStyle(
+                      fontSize: 10.0
+                  ),
+                ),
+
+              ),
+              Tab(
+                icon: Icon(Icons.image),
+                child: Text("Photos",
+                  style: TextStyle(
+                      fontSize: 10.0
+                  ),
+                ),
+              ),
+              Tab(
+                icon: Icon(Icons.videocam),
+                child: Text("Videos",
+                  style: TextStyle(
+                      fontSize: 10.0
+                  ),
+                ),
+              ),
+              Tab(
+                icon: Icon(Icons.folder),
+                child: Text("Files",
+                  style: TextStyle(
+                      fontSize: 10.0
+                  ),
+                ),
+              )
+            ],
+          ),
+          body: TabBarView(
+            controller: _tabController,
+            children: <Widget>[
+              ShowApk(),
+              ShowPhotos(),
+              showVideos(),
+              showFiles(),
+            ],
+          )
+      ),
     );
   }
+
+
+
 
   // Get All Photos
   Future _getAllPhotos()async{
@@ -247,50 +335,122 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
 //    }
 //    catch(e){
     List listImagesBeforeShowing=List();
-    listImagesBeforeShowing= await platform.invokeMethod("Photos");
-    this.listImages.addAll(listImagesBeforeShowing);
-    listImages.forEach((element) async{
+    await platform.invokeMethod("Photos").then((value){
+      listImages.addAll(value);
+      if(imageThumbnail.isEmpty) {
+        listImages.forEach((element) async {
 //         imageThumbnail.add(await FlutterMultiMediaPicker.getThumbnail(fileId: element["id"], type: MediaType.IMAGE));
-      notifierImageThumbnail.value=await FlutterMultiMediaPicker.getThumbnail(fileId: element["id"], type: MediaType.IMAGE);
-      imageThumbnail.add(notifierImageThumbnail.value);
+          notifierImageThumbnail.value =
+          await FlutterMultiMediaPicker.getThumbnail(
+              fileId: element["id"], type: MediaType.IMAGE).whenComplete(() {
+
+          });
+          imageThumbnail.add(notifierImageThumbnail.value);
+        });
+      }
+    });
+
+//    }
+
+  }
+
+
+// Get All Videos
+  Future _getAllVideos()async {
+//     try {
+//       await FlutterMultiMediaPicker.getVideo().then((value){
+//         videos=value;
+//         videos.forEach((element)async{
+//           notifierVideoThumbnail.value=await FlutterMultiMediaPicker.getThumbnail(fileId:element.id , type: element.type);
+//           videosThumbnail.add(notifierVideoThumbnail.value);
+//         });
+//       });
+
+////
+////       print(videosThumbnail.length);
+//     } catch (e) {
+
+
+   await platform.invokeMethod("Videos").then((value)async {
+     videos.addAll(value);
+     if (videosThumbnail.isEmpty){
+       for (int i = 0; i < videos.length; i++) {
+         if ((await getTemporaryDirectory())
+             .listSync()
+             .isNotEmpty) {
+           if (!(File.fromUri(Uri.parse(
+               (await getTemporaryDirectory()).path + "/" + videos[i]["Path"]
+                   .toString()
+                   .split("/")
+                   .last
+                   .split(".")
+                   .first + ".jpg")).existsSync())) {
+             notifierVideoThumbnail.value = await VideoThumbnail.thumbnailFile(
+                 video: File
+                     .fromUri(Uri.parse(videos[i]["Path"]))
+                     .path,
+                 thumbnailPath: (await getTemporaryDirectory()).path,
+                 imageFormat: ImageFormat.JPEG,
+                 maxHeight: 50,
+                 quality: 100
+             );
+             videosThumbnail.add(
+                 notifierVideoThumbnail.value
+             );
+           }
+           else {
+             notifierVideoThumbnail.value =
+                 (await getTemporaryDirectory()).path + "/" + videos[i]["Path"]
+                     .toString()
+                     .split("/")
+                     .last
+                     .split(".")
+                     .first + ".jpg";
+             videosThumbnail.add(notifierVideoThumbnail.value);
+           }
+         }
+         else {
+           notifierVideoThumbnail.value = await VideoThumbnail.thumbnailFile(
+               video: File
+                   .fromUri(Uri.parse(videos[i]["Path"]))
+                   .path,
+               thumbnailPath: (await getTemporaryDirectory()).path,
+               imageFormat: ImageFormat.JPEG,
+               maxHeight: 500,
+               quality: 50
+           );
+           videosThumbnail.add(
+               notifierVideoThumbnail.value
+           );
+         }
+       }
+   }
     });
 
 
-
+//    notifierVideoThumbnail.value = await FlutterMultiMediaPicker.getThumbnail(
+//        fileId: videos[0]["id"], type: MediaType.VIDEO);
+//    videosThumbnail.add(notifierVideoThumbnail.value);
+//    int nextVideo=1;
+//    for(int i=0;i<nextVideo;i++){
+//      if(i<videos.length){
+//
+//        notifierVideoThumbnail.value = await FlutterMultiMediaPicker.getThumbnail(
+//            fileId: videos[i]["id"], type: MediaType.VIDEO).whenComplete((){
+//        });
+//        videosThumbnail.add(notifierVideoThumbnail.value);
+//        nextVideo++;
+//      }
 //    }
 
 
 
 
-
-  }
-// Get All Videos
-  Future _getAllVideos()async {
-//     try {
-//       videos=await FlutterMultiMediaPicker.getVideo();
-//       videos.forEach((element)async{
-//         this.videosThumbnail.add(await FlutterMultiMediaPicker.getThumbnail(fileId: element.id, type:element.type));
-//
-//       });
-////
-////       print(videosThumbnail.length);
-//     } catch (e) {
-    List listVideoBeforeShowing=List();
-    listVideoBeforeShowing= await platform.invokeMethod("Videos");
-    this.videos.addAll(listVideoBeforeShowing);
-    videos.forEach((f) async {
-     await FlutterMultiMediaPicker.getThumbnail(
-          fileId: f["id"], type: MediaType.VIDEO).then((value){
-       notifierVideoThumbnail.value=value;
-        videosThumbnail.add(notifierVideoThumbnail.value);
-      });
-
-    });
-
-
-
 //     }
+
   }
+
+
 
   _setpathForDirectory()async{
     Directory directory=await getExternalStorageDirectory();
@@ -386,80 +546,75 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
 
   }
 
-
-
   //ShowVideos
   Widget showVideos(){
-    return  ValueListenableBuilder(
-      valueListenable: notifierVideoThumbnail,
-      builder: (BuildContext context,String path,Widget w){
-        return Container(
-            child:videos.isEmpty?Center(
-              child: Text("No Videos Found"),
-            ):videosThumbnail.isEmpty?Center(
-              child: CircularProgressIndicator(
-                valueColor:AlwaysStoppedAnimation(MediaQuery.of(context).platformBrightness==Brightness.dark?Colors.white70:Colors.black),
-                strokeWidth: 1.50,
-              ),
-            ):Stack(
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.all(10.0),
-                child: GridView.builder(
-                    gridDelegate:SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 5,
-                        mainAxisSpacing: 5,
-                        crossAxisSpacing: 5,
-                        childAspectRatio: 0.5
-                    ),
-                    itemCount: videosThumbnail.length,
-                    itemBuilder: (BuildContext context,i){
-                      return GestureDetector(
-                        onTap: (){
-                          if(selectToShare.contains(videos[i])){
-                            setState(() {
-                              selectToShare.remove(videos[i]);
-                              selectedPath.remove(videos[i]['Path']);
-                            });
-
-                          }
-                          else{
-                            setState(() {
-                              selectToShare.add(videos[i]);
-                              selectedPath.add(videos[i]["Path"]);
-                            });
-
-                          }
-                        },
-                        onLongPress: (){
-                          Navigator.push(context, MaterialPageRoute(builder: (context){
-                            return PlayVideo(
-                                videos[i]["Path"]
-                            );
-                          }));
-                        },
-                        child: Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                              borderRadius: BorderRadius.all(Radius.circular(selectToShare.contains(videos[i])?20:12)),
-                              border: Border.all(color:selectToShare.contains(videos[i])?Colors.teal:Colors.black,
-                                  width: selectToShare.contains(videos[i])?2.5:1
-                              )
-                          ),
-                          child: Image.file(File.fromUri(Uri.parse(videosThumbnail[i])),
-                            fit: BoxFit.cover,
-                          ),
+        return ValueListenableBuilder(
+          valueListenable: notifierVideoThumbnail,
+          builder: (BuildContext context,String path,Widget w){
+            return Container(
+              child:videos.isEmpty?Center(
+                child: Text("No Videos Found"),
+              ):Stack(
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.all(10.0),
+                    child: GridView.builder(
+                        gridDelegate:SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 5,
+                            mainAxisSpacing: 5,
+                            crossAxisSpacing: 5,
+                            childAspectRatio: 0.5
                         ),
-                      );
-                    }
-                ),
+                        itemCount: videos.length,
+                        itemBuilder: (BuildContext context,i){
+                          return GestureDetector(
+                            onTap: (){
+                              if(selectToShare.contains(videos[i])){
+                                setState(() {
+                                  selectToShare.remove(videos[i]);
+                                  selectedPath.remove(videos[i]["Path"]);
+                                });
+
+                              }
+                              else{
+                                setState(() {
+                                  selectToShare.add(videos[i]);
+                                  selectedPath.add(videos[i]["Path"]);
+                                });
+
+                              }
+                            },
+                            onLongPress: (){
+                              Navigator.push(context, MaterialPageRoute(builder: (context){
+                                return PlayVideo(
+                                    videos[i]["Path"]
+                                );
+                              }));
+                            },
+                            child: Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.all(Radius.circular(selectToShare.contains(videos[i])?20:12)),
+                                  border: Border.all(color:selectToShare.contains(videos[i])?Colors.teal:themeChanger.themeMode()==ThemeMode.dark?Colors.white60:Colors.black,
+                                      width: selectToShare.contains(videos[i])?2.5:1
+                                  )
+                              ),
+                              child: videosThumbnail.length>i? Image.file(File.fromUri(Uri.parse(videosThumbnail[i])),
+                                fit: BoxFit.cover,
+                              ):Container(),
+                            ),
+                          );
+                        }
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+
+            );
+          },
 
         );
-      },
-    );
+
 
 
 
@@ -474,14 +629,14 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
         valueListenable: notifierImageThumbnail,
         builder: (BuildContext context,String path,Widget w){
           return Container(
-            child: (images.isEmpty && listImages.isEmpty)?Center(
+            child:(images.isEmpty && listImages.isEmpty)?Center(
               child: Container(
                 child: Text("No Photos Found"),
               ),
             ):imageThumbnail.isEmpty?Center(
               child: Container(
                 child:CircularProgressIndicator(
-                  valueColor:AlwaysStoppedAnimation(MediaQuery.of(context).platformBrightness==Brightness.dark?Colors.white70:Colors.black),
+                  valueColor:AlwaysStoppedAnimation(themeChanger.themeMode()==ThemeMode.dark?Colors.white70:Colors.black),
                   strokeWidth: 1.50,
                 ),
               ),
@@ -560,7 +715,7 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
                             padding: EdgeInsets.all(8),
                             decoration: BoxDecoration(
                                 borderRadius: BorderRadius.all(Radius.circular(!selectToShare.contains(listImages[i])?12:20)),
-                                border: Border.all(color:selectToShare.contains(listImages[i])?Colors.teal:Colors.black,
+                                border: Border.all(color:selectToShare.contains(listImages[i])?Colors.teal:themeChanger.themeMode()==ThemeMode.dark?Colors.white60:Colors.black,
                                     width: selectToShare.contains(listImages[i])?2.5:1
                                 )
                             ),
@@ -591,7 +746,7 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
         child:installApps.isEmpty?Center(
           child: Container(
             child:CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation(MediaQuery.of(context).platformBrightness==Brightness.dark?Colors.white70:Colors.black),
+              valueColor: AlwaysStoppedAnimation(themeChanger.themeMode()==ThemeMode.dark?Colors.white70:Colors.black),
               strokeWidth: 1.50,
             ),
           ),

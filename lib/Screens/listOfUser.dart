@@ -4,6 +4,8 @@ import 'package:sharethings/AleartDialogs/LocationTurnOnAlertDialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pull_to_refresh/pull_to_refresh.dart';
+import 'package:sharethings/Screens/listOfUserInAndroid10.dart';
+import 'package:sharethings/config.dart';
 import 'ViewFilesReceiver.dart';
 //import 'package:wifi/wifi.dart';
 import 'package:qrscan/qrscan.dart' as scanner;
@@ -20,6 +22,7 @@ class _ListOfUserState extends State<ListOfUser> {
   String connectedWifiSSID="";
   TextEditingController passwordController=TextEditingController();
   List listWifi=List();
+  String sdk;
   RefreshController _refreshController=RefreshController();
   RefreshController _refreshController1=RefreshController();
   static const platform=MethodChannel("Native.code/deviceList");
@@ -30,12 +33,9 @@ class _ListOfUserState extends State<ListOfUser> {
       if(permission){
         LocationTurnOnAlertDialog().dialog(context);
       }
-      else{
-        print(permission);
-      }
     }
     on PlatformException catch(e){
-      print("Hello");
+
     }
   }
 
@@ -51,8 +51,8 @@ class _ListOfUserState extends State<ListOfUser> {
 //    });
 
     try{
+      sdk= await platform.invokeMethod("GetAndroidVersion");
        listWifi=await platform.invokeMethod("deviceList");
-       print(await platform.invokeMethod("deviceList"));
     }
     on PlatformException catch(e){
       print("failed");
@@ -116,7 +116,6 @@ class _ListOfUserState extends State<ListOfUser> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-
         floatingActionButton: FloatingActionButton(
           onPressed: isConnected?()async{
             String ip=await scanner.scan();
@@ -128,8 +127,8 @@ class _ListOfUserState extends State<ListOfUser> {
           }:()async{
            await platform.invokeMethod("CheckConnectivityOfWifiOnScanQrCodePress");
           },
-           backgroundColor: !isConnected && MediaQuery.of(context).platformBrightness==Brightness.dark?Colors.white:
-           !isConnected && MediaQuery.of(context).platformBrightness==Brightness.light?Colors.black26:null,
+           backgroundColor: !isConnected && themeChanger.themeMode()==ThemeMode.dark?Colors.white:
+           !isConnected && themeChanger.themeMode()==ThemeMode.light?Colors.black26:null,
           child: Text("ScanCode",
           style: TextStyle(
             fontSize: 10.0
@@ -149,34 +148,34 @@ class _ListOfUserState extends State<ListOfUser> {
               onRefresh:(){
                 onRefresh();
               },
-              child:listWifi.isEmpty?Center(
-                child: Text("No wifi connection  there"),
-              ): ListView.builder(
-                    itemCount: listWifi.length,
-                    itemBuilder: (context,i){
-                      return Padding(
-                          padding: const EdgeInsets.all(8.0),
-                            child: Column(
-
-                              children: <Widget>[
-                                ListTile(
-                                  title: Text((i+1).toString()+". "+listWifi[i]["ssid"],style: TextStyle(
-                                      fontSize: 25
-                                  ),
-                                  ),
-                                  trailing: connectedWifiSSID=='"'+listWifi[i]['ssid']+'"'?Icon(Icons.check_circle):null,
-                                onTap: (){
-                                  PasswordEnterDialog(listWifi[i]["ssid"]);
-                                },
-                                ),
-                                Divider(),
-                              ],
-                            ),
-
-                        );
-
-                    },
-                  ),
+              child:listOfUserAndroid10().view(connectedWifiSSID)
+//              listWifi.isEmpty?Center(
+//                child: Text("No wifi connection found"),
+//              ): ListView.builder(
+//                    itemCount: listWifi.length,
+//                    itemBuilder: (context,i){
+//                      return Padding(
+//                          padding: const EdgeInsets.all(8.0),
+//                            child: Column(
+//                              children: <Widget>[
+//                                ListTile(
+//                                  title: Text((i+1).toString()+". "+listWifi[i]["ssid"],style:TextStyle(
+//                                      fontSize: 25
+//                                  ),
+//                                  ),
+//                                  trailing: connectedWifiSSID=='"'+listWifi[i]['ssid']+'"'?Icon(Icons.check_circle):null,
+//                                onTap:(){
+//                                  connectedWifiSSID!='"'+listWifi[i]['ssid']+'"'?PasswordEnterDialog(listWifi[i]["ssid"]):null;
+//                                },
+//                                ),
+//                                Divider(),
+//                              ],
+//                            ),
+//
+//                        );
+//
+//                    },
+//                  ),
 
             ),
           ),
@@ -225,21 +224,28 @@ class _ListOfUserState extends State<ListOfUser> {
     setState(() {
       wait=true;
     });
-    await platform.invokeMethod("ConnectToDevice",{"ssid":ssid,"password":password}).then((value){
-        wait=false;
-        isConnected=true;
+    try {
+      await platform.invokeMethod(
+          "ConnectToDevice", {"ssid": ssid.trim(), "password": password.trim()}).then((
+          value) {
+            print(value);
+        wait = false;
+        isConnected = true;
         NativeCodeGetConnectionInfo();
         setState(() {
 
         });
-
-
-    });
+      });
+    }
+    on PlatformException catch(e){
+      print(e.details);
+    }
 
 //    await Wifi.connection(ssid, password);
 
   }
   errorDialog(){
+
     return showDialog(context: context,builder: (context){
       return AlertDialog(
         title: Text("Wrong password"),

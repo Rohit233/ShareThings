@@ -17,21 +17,19 @@ import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
 import android.os.Build;
+import android.os.Vibrator;
 import android.provider.MediaStore;
 import android.provider.Settings;
 import android.widget.Toast;
 
-import java.io.BufferedInputStream;
+import androidx.annotation.RequiresApi;
+import androidx.core.app.ActivityCompat;
+
 import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import io.flutter.embedding.android.FlutterActivity;
 import io.flutter.embedding.engine.FlutterEngine;
@@ -44,38 +42,148 @@ public class MainActivity extends FlutterActivity {
     private  static  final String CHANNEL2="Native.code/SplitFiles";
     private  static  final String CHANNEL3="Native.code/GetMedia";
     private static final int REQUEST_LOCATION = 123;
-
+    private WifiManager.LocalOnlyHotspotReservation mReservation;
+    @RequiresApi(api = Build.VERSION_CODES.O)
     @SuppressLint("MissingPermission")
     @Override
     public void configureFlutterEngine( FlutterEngine flutterEngine) {
         GeneratedPluginRegistrant.registerWith(flutterEngine);
         WifiManager manager=(WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-
+        AtomicReference<HotPostManager> hotPostManager = new AtomicReference<>(null);
         new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), CHANNEL)
                 .setMethodCallHandler((call, result) -> {
                     switch (call.method) {
                         case "wifiOn":
+                               if(hotPostManager.get()!=null) {
+                                   hotPostManager.get().turnOffHotspot();
+                                   hotPostManager.set(new HotPostManager(getApplicationContext()));
+                               }
                             if (!manager.isWifiEnabled()) {
-                                manager.setWifiEnabled(true);
+                                if(Build.VERSION.SDK_INT==Build.VERSION_CODES.Q){
+                                    Intent intent=new Intent(Settings.Panel.ACTION_WIFI);
+                                    startActivity(intent);
+                                }
+                                else {
+                                    manager.setWifiEnabled(true);
+                                    result.success(true);
+                                    return;
+                                }
 
-                            } else {
-                                Toast.makeText(getApplicationContext(), "Wifi on", Toast.LENGTH_LONG).show();
 
                             }
+//                            else {
+//                                Toast.makeText(getApplicationContext(), "Wifi on", Toast.LENGTH_LONG).show();
+//                                result.success(true);
+//                            }
                             if (!manager.isWifiEnabled()) {
                                 Toast.makeText(getApplicationContext(), "Wifi off", Toast.LENGTH_LONG).show();
+                                result.success(false);
+                            }
+                            else {
+                                Toast.makeText(getApplicationContext(), "Wifi on", Toast.LENGTH_LONG).show();
+                                result.success(true);
                             }
                             break;
                         case "Hotspot":
-                            HotPostManager hotPostManager = new HotPostManager(this.getApplicationContext());
-                            if (hotPostManager.isApOn()) {
-                                Toast.makeText(getApplicationContext(), "Hotspot is on", Toast.LENGTH_LONG).show();
-                                result.success(true);
+
+//                            if (hotPostManager.isApOn()) {
+//                                Toast.makeText(getApplicationContext(), "Hotspot is on", Toast.LENGTH_LONG).show();
+//                                WifiConfiguration configuration=(WifiConfiguration) hotPostManager.getConfiguration();
+//                                HashMap hashMap=new HashMap();
+//                                hashMap.put("SSID",configuration.SSID);
+//                                hashMap.put("Password",configuration.preSharedKey);
+//                                result.success(hashMap);
+//                            }
+//                            else{
+
+
+
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+
+                                    if (!Settings.System.canWrite(this)) {
+                                        Intent intent = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS);
+                                        intent.setData(Uri.parse("package:" + this.getPackageName()));
+                                        this.startActivity(intent);
+                                        result.success(null);
+
+                                    } else {
+                                         if(hotPostManager.get()!=null){
+                                          hotPostManager.get().setWifiApConfiguration(result);
+                                         }
+                                         else {
+                                             HotPostManager hotPostManager1 = new HotPostManager(getApplicationContext());
+                                             System.out.println(hotPostManager1);
+                                             hotPostManager1.setWifiApConfiguration(result);
+                                             hotPostManager.set(hotPostManager1);
+//                                             hotPostManager1 = null;
+                                         }
+//                                     result.success(true);
+//                                     if(b){
+//                                       Toast.makeText(getApplicationContext(),hotPostManager.configuration.SSID+"",Toast.LENGTH_LONG).show();
+//                                    }
+//                                    hashMap.put("SSID", configuration.SSID);
+//                                   hashMap.put("Password", configuration.preSharedKey);
+//                                   result.success(hashMap);
+
+
+                                        //                                    WifiManager manager1=(WifiManager)getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+//                                    try {
+//                                        mReservation=null;
+//                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+//                                            if (manager1.isWifiEnabled()) {
+//                                                manager1.setWifiEnabled(false);
+//                                            }
+//                                            if(!hotPostManager.isApOn()){
+//
+//                                            manager1.startLocalOnlyHotspot(new WifiManager.LocalOnlyHotspotCallback() {
+//
+//                                                @Override
+//                                                public void onStarted(WifiManager.LocalOnlyHotspotReservation reservation) {
+//                                                    super.onStarted(reservation);
+//
+//                                                    mReservation=null;
+//                                                    mReservation = reservation;
+//                                                    hashMap.put("SSID", reservation.getWifiConfiguration().SSID);
+//                                                    hashMap.put("Password", reservation.getWifiConfiguration().preSharedKey);
+//                                                    Toast.makeText(getApplicationContext(), reservation.getWifiConfiguration().SSID, Toast.LENGTH_LONG).show();
+//
+//                                                    result.success(hashMap);
+//                                                }
+//
+//                                                @Override
+//                                                public void onStopped() {
+//                                                    super.onStopped();
+//                                                }
+//
+//                                                @Override
+//                                                public void onFailed(int reason) {
+//                                                    super.onFailed(reason);
+//                                                  System.out.print(reason);
+//                                                }
+//                                            }, new Handler());
+//                                        }
+//                                            else{
+//                                                hashMap.put("SSID", mReservation.getWifiConfiguration().SSID);
+//                                                hashMap.put("Password", mReservation.getWifiConfiguration().preSharedKey);
+//                                                result.success(hashMap);
+//                                            }
+//                                        }
+//
+//
+//                                    }
+//                                    catch (Exception e){
+//                                        e.printStackTrace();
+//                                    }
+//                                    Toast.makeText(getApplicationContext(),hashMap.toString(),Toast.LENGTH_LONG).show();
+                                    }
+
+
                             }
-                            else {
-                                Toast.makeText(getApplicationContext(), "Hotspot is off", Toast.LENGTH_LONG).show();
-                                result.success(false);
-                            }
+
+//                            }
+                            break;
+                        case "motorVibrate":
+                            MotorVibrate();
                             break;
                         case "checkWifi":
                             if (manager.isWifiEnabled()) {
@@ -83,6 +191,11 @@ public class MainActivity extends FlutterActivity {
                             } else {
                                 result.success(false);
                             }
+                            break;
+                        case "HotspotOff":
+                                hotPostManager.get().turnOffHotspot();
+                                hotPostManager.set(null);
+                            result.success(true);
                             break;
                     }
 
@@ -123,10 +236,12 @@ public class MainActivity extends FlutterActivity {
                             hashMap.put("Path", imagePath);
                             hashMap.put("id", id);
                             photosList.add(hashMap);
+                            hashMap=null;
                         }
                     }
                     cursor.close();
                     result.success(photosList);
+                    photosList=null;
                 }
 
 
@@ -154,10 +269,12 @@ public class MainActivity extends FlutterActivity {
                             hashMap.put("Path", videoPath);
                             hashMap.put("id", id);
                             videoList.add(hashMap);
+                            hashMap=null;
                         }
                     }
                     cursor.close();
                     result.success(videoList);
+                    videoList=null;
 
                 }
 
@@ -198,8 +315,6 @@ public class MainActivity extends FlutterActivity {
         });
     }
 
-
-    @SuppressLint("MissingPermission")
     private void deviceList(FlutterEngine flutterEngine, WifiManager manager) {
         new MethodChannel(
                 flutterEngine.getDartExecutor().getBinaryMessenger(),CHANNEL1
@@ -215,7 +330,6 @@ public class MainActivity extends FlutterActivity {
 //                        maps.put("netId",scanWifi.get(i).)
                         listWifi.add(maps);
                     }
-
                     result.success(listWifi);
 
                     break;
@@ -236,14 +350,28 @@ public class MainActivity extends FlutterActivity {
 
                     }
                     break;
+                case "checkLocationPermission":
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        if (getApplicationContext().checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                            result.success(false);
+                        }
+                        else {
+                            result.success(true);
+                        }
+                    }
+                    break;
                 case "locationPermission":
                     LocationManager locationManager;
                     locationManager= (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         if(getApplicationContext().checkSelfPermission( Manifest.permission.ACCESS_COARSE_LOCATION)!= PackageManager.PERMISSION_GRANTED){
-                            Toast.makeText(getApplicationContext(),"Allow Location Permission",Toast.LENGTH_LONG).show();
-                            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                    Uri.fromParts("package",getPackageName(),null)));
+                           ActivityCompat.requestPermissions(MainActivity.this,new String[]{
+                                   Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION
+                           },REQUEST_LOCATION);
+
+//                            Toast.makeText(getApplicationContext(),"Allow Location Permission",Toast.LENGTH_LONG).show();
+//                            startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+//                                    Uri.fromParts("package",getPackageName(),null)));
                         }
                         else if(!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)){
                             result.success(true);
@@ -258,31 +386,55 @@ public class MainActivity extends FlutterActivity {
                     locationManager1= (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
                     if(!locationManager1.isProviderEnabled(LocationManager.GPS_PROVIDER)){
                         startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+                        result.success(false);
+                    }else{
+                        result.success(true);
                     }
                     break;
-                case "ConnectToDevice":
-                    WifiConfiguration wifiConfiguration=new WifiConfiguration();
-                    wifiConfiguration.SSID=String.format("\"%s\"",methodCall.argument("ssid").toString());
-                    wifiConfiguration.preSharedKey=String.format("\"%s\"",methodCall.argument("password").toString());
-                    WifiManager wifiManager=(WifiManager)getApplicationContext().getSystemService(WIFI_SERVICE);
-                    int netId=wifiManager.addNetwork(wifiConfiguration);
-                    wifiManager.disconnect();
-                    boolean isValid= wifiManager.enableNetwork(netId,true);
-
-//                    if(isValid){
-//                        wifiManager.disableNetwork(netId);
-//                    }
-
-                    boolean isConnected= wifiManager.reconnect();
-                    if(isConnected){
-//                       Toast.makeText(getApplicationContext(),wifiManager.saveConfiguration().+"",Toast.LENGTH_LONG).show();
+                case "checkLocationOn":
+                    LocationManager locationManager2;
+                    locationManager2=(LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+                    if(locationManager2.isProviderEnabled(LocationManager.GPS_PROVIDER)){
+                        result.success(true);
                     }
-                    result.success(netId);
+                    else {
+                        result.success(false);
+                    }
+                   break;
+                case "ConnectToDevice":
+                       if(Build.VERSION.SDK_INT==Build.VERSION_CODES.Q){
+                           Intent intent=new Intent(Settings.Panel.ACTION_WIFI);
+                           startActivity(intent);
+                       }
+                       else {
+                           Intent intent=new Intent(Settings.ACTION_WIFI_SETTINGS);
+                           startActivity(intent);
+//                           WifiConfiguration wifiConfiguration = new WifiConfiguration();
+//                           wifiConfiguration.SSID = String.format("\"%s\"", methodCall.argument("ssid").toString());
+//                           wifiConfiguration.preSharedKey = String.format("\"%s\"", methodCall.argument("password").toString());
+//                           WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+//                           int netId = wifiManager.addNetwork(wifiConfiguration);
+//                           wifiManager.disconnect();
+//                           boolean isValid = wifiManager.enableNetwork(netId, true);
+//                           Toast.makeText(getApplicationContext(), wifiConfiguration.SSID + " " + wifiConfiguration.preSharedKey, Toast.LENGTH_LONG).show();
+////                    if(isValid){
+////                        wifiManager.disableNetwork(netId);
+////                    }
+//
+//                           boolean isConnected = wifiManager.reconnect();
+//                           if (isConnected) {
+////                       Toast.makeText(getApplicationContext(),wifiManager.saveConfiguration().+"",Toast.LENGTH_LONG).show();
+//                           }
+//                           result.success(netId);
+                       }
                     break;
                 case "CheckConnectivityOfWifiOnScanQrCodePress":
                     if(manager.getConnectionInfo().getIpAddress()==0){
                         Toast.makeText(getApplicationContext(),"Please Connect to Hotspot",Toast.LENGTH_LONG).show();
                     }
+                    break;
+                case "GetAndroidVersion":
+                    result.success(Build.VERSION.SDK);
                     break;
             }
 
@@ -299,6 +451,15 @@ public class MainActivity extends FlutterActivity {
 
         }
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    }
+
+   public void  MotorVibrate(){
+       Vibrator vibrator=(Vibrator)getSystemService(Context.VIBRATOR_SERVICE);
+       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
+           if(vibrator.hasVibrator()){
+               vibrator.vibrate(50);
+           }
+       }
     }
 
 }
