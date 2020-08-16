@@ -59,7 +59,7 @@ class _HomePageState extends State<HomePage> {
         break;
       }
     }
-    print(IP);
+//    print(IP);
   }
   NativeCodeHotspot()async{
      if(int.parse(await platformForLocation.invokeMethod("GetAndroidVersion"))<=25){
@@ -69,14 +69,21 @@ class _HomePageState extends State<HomePage> {
              await platform.invokeMethod("Hotspot").then((value){
                if (value != null){
                  var wifiip;
-                 getIpAddress().whenComplete((){
-                   wifiip=IP;
-                   Navigator.push(
-                       context, MaterialPageRoute(builder: (context) {
+                 Map hotspotDetails=value;
+                 if(!hotspotDetails.containsKey("IP")) {
+                   getIpAddress().whenComplete(() {
+                     wifiip = IP;
+                     Navigator.push(
+                         context, MaterialPageRoute(builder: (context) {
+                       return SendScreen();
+                     }));
+                   });
+                 }
+                 else{
+                   Navigator.push(context, MaterialPageRoute(builder: (context){
                      return SendScreen();
                    }));
-
-                 });
+                 }
 
 //
                }

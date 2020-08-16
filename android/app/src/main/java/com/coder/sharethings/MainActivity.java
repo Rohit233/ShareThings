@@ -26,7 +26,12 @@ import androidx.annotation.RequiresApi;
 import androidx.core.app.ActivityCompat;
 
 import java.io.ByteArrayOutputStream;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -54,7 +59,7 @@ public class MainActivity extends FlutterActivity {
                 .setMethodCallHandler((call, result) -> {
                     switch (call.method) {
                         case "wifiOn":
-                               if(hotPostManager.get()!=null) {
+                               if(hotPostManager.get()!=null && hotPostManager.get().isApOn()) {
                                    hotPostManager.get().turnOffHotspot();
                                    hotPostManager.set(new HotPostManager(getApplicationContext()));
                                }
@@ -84,6 +89,24 @@ public class MainActivity extends FlutterActivity {
                                 result.success(true);
                             }
                             break;
+
+
+                        case "GetIp":
+                            try {
+                                for (Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces(); en.hasMoreElements();) {
+                                    NetworkInterface intf = en.nextElement();
+                                    for (Enumeration<InetAddress> enumIpAddr = intf.getInetAddresses(); enumIpAddr.hasMoreElements();) {
+                                        InetAddress inetAddress = enumIpAddr.nextElement();
+                                        if (!inetAddress.isLoopbackAddress() && inetAddress instanceof Inet4Address) {
+                                            result.success(inetAddress.getHostAddress());
+
+                                        }
+                                    }
+                                }
+                            } catch (SocketException ex) {
+
+                            }
+                            break;
                         case "Hotspot":
 
 //                            if (hotPostManager.isApOn()) {
@@ -95,9 +118,6 @@ public class MainActivity extends FlutterActivity {
 //                                result.success(hashMap);
 //                            }
 //                            else{
-
-
-
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
 
                                     if (!Settings.System.canWrite(this)) {
@@ -112,7 +132,6 @@ public class MainActivity extends FlutterActivity {
                                          }
                                          else {
                                              HotPostManager hotPostManager1 = new HotPostManager(getApplicationContext());
-                                             System.out.println(hotPostManager1);
                                              hotPostManager1.setWifiApConfiguration(result);
                                              hotPostManager.set(hotPostManager1);
 //                                             hotPostManager1 = null;
@@ -179,6 +198,16 @@ public class MainActivity extends FlutterActivity {
 
 
                             }
+                                else {
+                                        if (hotPostManager.get() != null) {
+                                            hotPostManager.get().setWifiApConfiguration(result);
+                                        } else {
+                                            HotPostManager hotPostManager1 = new HotPostManager(getApplicationContext());
+                                            hotPostManager1.setWifiApConfiguration(result);
+                                            hotPostManager.set(hotPostManager1);
+//                                             hotPostManager1 = null;
+                                        }
+                                    }
 
 //                            }
                             break;
@@ -358,6 +387,9 @@ public class MainActivity extends FlutterActivity {
                         else {
                             result.success(true);
                         }
+                    }
+                    else if(Build.VERSION.SDK_INT<=Build.VERSION_CODES.LOLLIPOP_MR1){
+                        result.success(false);
                     }
                     break;
                 case "locationPermission":

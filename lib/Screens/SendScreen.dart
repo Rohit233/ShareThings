@@ -77,7 +77,7 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
       break;
       }
       }
-      print(IP);
+//      print(IP);
   }
   @override
   void initState(){
@@ -140,19 +140,30 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
         if(await platformForLocation.invokeMethod("checkLocationOn")){
           await platformForHotspot.invokeMethod("Hotspot").then((value){
             if (value != null){
+              Map hotspotDetails=value;
               var wifiip;
-                getIpAddress().whenComplete((){
-                  wifiip=IP;
-                    Navigator.push(
-                        context, MaterialPageRoute(builder: (context) {
-                      return test(selectToShare, wifiip, selectedPath, value);
-                    }));
-
+              if(!hotspotDetails.containsKey("IP")) {
+                getIpAddress().whenComplete(()async{
+                  wifiip = IP;
+                  if(wifiip==null){
+                    wifiip=await platformForHotspot.invokeMethod("GetIp");
+                  }
+                  Navigator.push(
+                      context, MaterialPageRoute(builder: (context) {
+                    return test(selectToShare, wifiip, selectedPath, value);
+                  }));
                 });
+              }
+              else{
+                Navigator.push(context, MaterialPageRoute(builder: (context){
+                  return test(selectToShare,hotspotDetails["IP"],selectedPath,value);
+                }));
+              }
 
 //
             }
           });
+
 
         }
         else{
