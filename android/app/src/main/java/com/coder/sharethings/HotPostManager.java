@@ -13,6 +13,12 @@ import androidx.annotation.RequiresApi;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.Enumeration;
+import java.util.Formatter;
 import java.util.HashMap;
 
 import io.flutter.plugin.common.MethodChannel;
@@ -104,7 +110,21 @@ public class HotPostManager {
                     hashMap.put("SSID",wifiConfiguration.SSID);
                     hashMap.put("Password",wifiConfiguration.preSharedKey);
                     configuration=wifiConfiguration;
-                    result.success(hashMap);
+                    try {
+                        for (Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces(); en.hasMoreElements();) {
+                            NetworkInterface intf = en.nextElement();
+                            for (Enumeration<InetAddress> enumIpAddr = intf.getInetAddresses(); enumIpAddr.hasMoreElements();) {
+                                InetAddress inetAddress = enumIpAddr.nextElement();
+                                if (!inetAddress.isLoopbackAddress() && inetAddress instanceof Inet4Address) {
+                                    hashMap.put("IP",inetAddress.getHostAddress());
+                                    result.success(hashMap);
+
+                                }
+                            }
+                        }
+                    } catch (SocketException ex) {
+
+                    }
                 }
                 catch (Exception e){
                     e.printStackTrace();
