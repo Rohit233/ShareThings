@@ -89,6 +89,9 @@ public class HotPostManager {
                         hashMap.put("Password", mReservation.getWifiConfiguration().preSharedKey);
                         result.success(hashMap);
                     }
+                    else{
+                        Toast.makeText(context,"Please Disable hotspot app create hotspot automatically",Toast.LENGTH_LONG).show();
+                    }
                 }
 
             }

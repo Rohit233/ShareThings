@@ -239,41 +239,45 @@ public class MainActivity extends FlutterActivity {
         new MethodChannel(
                 flutterEngine.getDartExecutor().getBinaryMessenger(),CHANNEL3
         ).setMethodCallHandler((methodCall, result) -> {
-            if(methodCall.method.equals("Photos")){
-                ArrayList<HashMap<String,String>> photosList=new ArrayList<>();
-                ContentResolver cr=getActivity().getContentResolver();
-                Uri uri= MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
-                Cursor cursor=cr.query(uri, new String[]{
+            if(methodCall.method.equals("Photos")) {
+                try {
+                ArrayList<HashMap<String, String>> photosList = new ArrayList<>();
+                ContentResolver cr = getActivity().getContentResolver();
+                Uri uri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+                Cursor cursor = cr.query(uri, new String[]{
                                 MediaStore.Images.Media._ID,
-                                MediaStore.Images.Media.DATE_ADDED,
+//                                MediaStore.Images.Media.DATE_ADDED,
                                 MediaStore.Images.Media.DATA,
-                                MediaStore.Images.Media.BUCKET_DISPLAY_NAME,
-                                MediaStore.Images.Media.BUCKET_ID,
-                                MediaStore.Images.Media.ORIENTATION,
-                                MediaStore.Images.Media.MIME_TYPE
+//                                MediaStore.Images.Media.BUCKET_DISPLAY_NAME,
+//                                MediaStore.Images.Media.BUCKET_ID,
+//                                MediaStore.Images.Media.ORIENTATION,
+//                                MediaStore.Images.Media.MIME_TYPE
                         }
-                        ,null
-                        ,null, MediaStore.Images.Media.DATE_ADDED + " DESC");
-                int count=0;
-                if(cursor!=null){
-                    count=cursor.getCount();
-                    if(count>0){
-                        while(cursor.moveToNext()){
-                            HashMap hashMap=new HashMap<>();
-                            String imagePath=cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
-                            String id=cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media._ID));
+                        , null
+                        , null, MediaStore.Images.Media.DATE_ADDED + " DESC");
+                int count = 0;
+                if (cursor != null) {
+                    count = cursor.getCount();
+                    if (count > 0) {
+                        while (cursor.moveToNext()) {
+                            HashMap hashMap = new HashMap<>();
+                            String imagePath = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
+                            String id = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media._ID));
                             hashMap.put("Path", imagePath);
                             hashMap.put("id", id);
                             photosList.add(hashMap);
-                            hashMap=null;
+                            hashMap = null;
                         }
                     }
                     cursor.close();
                     result.success(photosList);
-                    photosList=null;
+                    photosList = null;
                 }
 
-
+            }
+                catch (Exception e){
+                    e.printStackTrace();
+                }
             }
             else if(methodCall.method.equals("Videos")){
                 ArrayList<HashMap<String,String>> videoList=new ArrayList<>();

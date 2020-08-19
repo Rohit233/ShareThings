@@ -176,7 +176,7 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
       }
 
     }on PlatformException catch(e){
-      print("failed");
+
     }
   }
 
@@ -338,31 +338,43 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
     List<MediaFile> images1;
 //    try {
 //      images1 = await FlutterMultiMediaPicker.getImage();
+//    images=images1;
 //         images1.forEach((f)async{
-//     imageThumbnail.add(await FlutterMultiMediaPicker.getThumbnail(fileId: f.id, type: f.type));
+//           notifierImageThumbnail.value=await FlutterMultiMediaPicker.getThumbnail(fileId: f.id, type: f.type);
+//     imageThumbnail.add(notifierImageThumbnail.value);
 //   });
 //
-//     images=images1;
+
 //    }
 //    catch(e){
-    List listImagesBeforeShowing=List();
-    await platform.invokeMethod("Photos").then((value){
-      listImages.addAll(value);
-      if(imageThumbnail.isEmpty) {
-        listImages.forEach((element) async {
+    try {
+      List listImagesBeforeShowing = List();
+      await platform.invokeMethod("Photos").then((value) {
+        listImages.addAll(value);
+        if (imageThumbnail.isEmpty) {
+          listImages.forEach((element) async {
 //         imageThumbnail.add(await FlutterMultiMediaPicker.getThumbnail(fileId: element["id"], type: MediaType.IMAGE));
-          notifierImageThumbnail.value =
-          await FlutterMultiMediaPicker.getThumbnail(
-              fileId: element["id"], type: MediaType.IMAGE).whenComplete(() {
+            try {
+              notifierImageThumbnail.value =
+              await FlutterMultiMediaPicker.getThumbnail(
+                  fileId: element["id"], type: MediaType.IMAGE)
+                  .whenComplete(() {});
+              imageThumbnail.add(notifierImageThumbnail.value);
+            }
+            catch(e){
+             listImages.remove(element);
+            }
+
 
           });
-          imageThumbnail.add(notifierImageThumbnail.value);
-        });
-      }
-    });
+        }
+      });
 
 //    }
+    }
+    catch(e){
 
+    }
   }
 
 
@@ -396,18 +408,26 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
                    .last
                    .split(".")
                    .first + ".jpg")).existsSync())) {
-             notifierVideoThumbnail.value = await VideoThumbnail.thumbnailFile(
-                 video: File
-                     .fromUri(Uri.parse(videos[i]["Path"]))
-                     .path,
-                 thumbnailPath: (await getTemporaryDirectory()).path,
-                 imageFormat: ImageFormat.JPEG,
-                 maxHeight: 50,
-                 quality: 100
-             );
-             videosThumbnail.add(
-                 notifierVideoThumbnail.value
-             );
+             try {
+               notifierVideoThumbnail.value =
+               await VideoThumbnail.thumbnailFile(
+                   video: File
+                       .fromUri(Uri.parse(videos[i]["Path"]))
+                       .path,
+                   thumbnailPath: (await getTemporaryDirectory()).path,
+                   imageFormat: ImageFormat.JPEG,
+                   maxHeight: 50,
+                   quality: 100
+               );
+               videosThumbnail.add(
+                   notifierVideoThumbnail.value
+               );
+             }
+             catch(e){
+               notifierVideoThumbnail.value=null;
+               videosThumbnail.add(notifierVideoThumbnail.value);
+
+             }
            }
            else {
              notifierVideoThumbnail.value =
@@ -421,18 +441,24 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
            }
          }
          else {
-           notifierVideoThumbnail.value = await VideoThumbnail.thumbnailFile(
-               video: File
-                   .fromUri(Uri.parse(videos[i]["Path"]))
-                   .path,
-               thumbnailPath: (await getTemporaryDirectory()).path,
-               imageFormat: ImageFormat.JPEG,
-               maxHeight: 500,
-               quality: 50
-           );
-           videosThumbnail.add(
-               notifierVideoThumbnail.value
-           );
+           try {
+             notifierVideoThumbnail.value = await VideoThumbnail.thumbnailFile(
+                 video: File
+                     .fromUri(Uri.parse(videos[i]["Path"]))
+                     .path,
+                 thumbnailPath: (await getTemporaryDirectory()).path,
+                 imageFormat: ImageFormat.JPEG,
+                 maxHeight: 500,
+                 quality: 50
+             );
+             videosThumbnail.add(
+                 notifierVideoThumbnail.value
+             );
+           }
+           catch(e){
+             notifierVideoThumbnail.value=null;
+             videosThumbnail.add(notifierVideoThumbnail.value);
+           }
          }
        }
    }
@@ -596,11 +622,14 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
                               }
                             },
                             onLongPress: (){
-                              Navigator.push(context, MaterialPageRoute(builder: (context){
-                                return PlayVideo(
-                                    videos[i]["Path"]
-                                );
-                              }));
+                              if(videosThumbnail[i]!=null) {
+                                Navigator.push(context,
+                                    MaterialPageRoute(builder: (context) {
+                                      return PlayVideo(
+                                          videos[i]["Path"]
+                                      );
+                                    }));
+                              }
                             },
                             child: Container(
                               padding: EdgeInsets.all(8),
@@ -610,9 +639,9 @@ class _SendScreenState extends State<SendScreen>with SingleTickerProviderStateMi
                                       width: selectToShare.contains(videos[i])?2.5:1
                                   )
                               ),
-                              child: videosThumbnail.length>i? Image.file(File.fromUri(Uri.parse(videosThumbnail[i])),
+                              child: videosThumbnail.length>i? videosThumbnail[i]!=null?Image.file(File.fromUri(Uri.parse(videosThumbnail[i])),
                                 fit: BoxFit.cover,
-                              ):Container(),
+                              ):Text('Failed to load Its corrupt file'):Container(),
                             ),
                           );
                         }
